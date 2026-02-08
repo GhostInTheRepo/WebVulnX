@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebVulnX - Security Scanner</title>
+    <meta name="description" content="Professional vulnerability scanning and security assessment tool">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="/" class="sidebar-logo">
+                    <img src="{{ url_for('static', filename='img/3.png') }}" alt="Logo" class="logo-icon">
+                    <div class="logo-text">
+                        <span class="logo-title">WebVulnX</span>
+                        <span class="logo-subtitle">Security Scanner</span>
+                    </div>
+                </a>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-item active" data-view="vuln-scan">
+                    <span class="nav-icon">🔍</span>
+                    <span class="nav-label">Vul Scanning</span>
+                </div>
+                
+                <div class="nav-item" data-view="port-scan">
+                    <span class="nav-icon">🔌</span>
+                    <span class="nav-label">Port Scanning</span>
+                </div>
+                
+                <div class="nav-item" data-view="dir-fuzz">
+                    <span class="nav-icon">📁</span>
+                    <span class="nav-label">Direc Fuzz</span>
+                </div>
+                
+                <div class="nav-item" data-view="tech-detect">
+                    <span class="nav-icon">🔧</span>
+                    <span class="nav-label">Tech Detect</span>
+                </div>
+                
+                <div class="nav-item" data-view="dns-recon">
+                    <span class="nav-icon">🌍</span>
+                    <span class="nav-label">DNS Recon</span>
+                </div>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle Dark Mode">
+                    <span class="toggle-icon">🌙</span>
+                    <span class="toggle-text">Dark Mode</span>
+                </button>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header">
+                <h1 class="header-title">
+                    <button class="mobile-menu-toggle" id="menu-toggle">
+                        ☰
+                    </button>
+                    <span>WebVulnX</span>
+                </h1>
+                <div class="header-actions">
+                    <button class="pdf-btn" id="main-pdf-btn">
+                        📄 Export Report
+                    </button>
+                </div>
+            </header>
+            
+            <div class="content-area">
+                <!-- Vulnerability Scanning View -->
+                <section id="vuln-scan" class="scan-view active">
+                    <div class="input-section">
+                        <div class="input-group">
+                            <div class="input-wrapper">
+                                <input type="text" 
+                                       id="vuln-target" 
+                                       class="target-input" 
+                                       placeholder="Enter URL to scan (e.g., https://example.com)">
+                                <span class="input-icon">🌐</span>
+                            </div>
+                            <button id="vuln-scan-btn" class="scan-btn">
+                                🚀 Start Scanning
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="results-section">
+                        <div class="results-header">
+                            <div class="results-title">
+                                <span class="results-title-icon">🔍</span>
+                                Vulnerability Results
+                            </div>
+                            <div class="results-stats">
+                                <!-- Stats will be populated dynamically -->
+                            </div>
+                        </div>
+                        <div class="results-body">
+                            <div class="empty-state">
+                                <div class="empty-icon">🛡️</div>
+                                <div class="empty-text">Ready to Scan</div>
+                                <div class="empty-hint">Enter a target URL and click "Start Scanning" to begin vulnerability assessment</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pdf-section">
+                        <button class="pdf-btn">
+                            📥 Generate PDF
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- Port Scanning View -->
+                <section id="port-scan" class="scan-view">
+                    <div class="input-section">
+                        <div class="input-group">
+                            <div class="input-wrapper">
+                                <input type="text" 
+                                       id="port-target" 
+                                       class="target-input" 
+                                       placeholder="Enter target IP or hostname (e.g., 192.168.1.1 or example.com)">
+                                <span class="input-icon">🖥️</span>
+                            </div>
+                            <button id="port-scan-btn" class="scan-btn">
+                                🚀 Port Scanning
+                            </button>
+                        </div>
+                        <div class="scan-options">
+                            <button class="option-btn active" data-type="quick" onclick="selectOption(this)">Quick (Top 25)</button>
+                            <button class="option-btn" data-type="common" onclick="selectOption(this)">Common Ports</button>
+                            <button class="option-btn" data-type="full" onclick="selectOption(this)">Full Scan</button>
+                        </div>
+                    </div>
+                    
+                    <div class="results-section">
+                        <div class="results-header">
+                            <div class="results-title">
+                                <span class="results-title-icon">🔌</span>
+                                Open Ports
+                            </div>
+                            <div class="results-stats">
+                                <!-- Stats will be populated dynamically -->
+                            </div>
+                        </div>
+                        <div class="results-body">
+                            <div class="empty-state">
+                                <div class="empty-icon">🔌</div>
+                                <div class="empty-text">Ready to Scan Ports</div>
+                                <div class="empty-hint">Enter a target and select scan type to discover open ports</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pdf-section">
+                        <button class="pdf-btn">
+                            📥 Generate PDF
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- Directory Fuzzing View -->
+                <section id="dir-fuzz" class="scan-view">
+                    <div class="input-section">
+                        <div class="input-group">
+                            <div class="input-wrapper">
+                                <input type="text" 
+                                       id="dir-target" 
+                                       class="target-input" 
+                                       placeholder="Enter URL to fuzz (e.g., https://example.com)">
+                                <span class="input-icon">📂</span>
+                            </div>
+                            <button id="dir-fuzz-btn" class="scan-btn">
+                                🚀 Start Fuzzing
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="results-section">
+                        <div class="results-header">
+                            <div class="results-title">
+                                <span class="results-title-icon">📁</span>
+                                Discovered Paths
+                            </div>
+                            <div class="results-stats">
+                                <!-- Stats will be populated dynamically -->
+                            </div>
+                        </div>
+                        <div class="results-body">
+                            <div class="empty-state">
+                                <div class="empty-icon">📁</div>
+                                <div class="empty-text">Ready to Fuzz</div>
+                                <div class="empty-hint">Discover hidden directories, admin panels, and sensitive files</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pdf-section">
+                        <button class="pdf-btn">
+                            📥 Generate PDF
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- Technology Detection View -->
+                <section id="tech-detect" class="scan-view">
+                    <div class="input-section">
+                        <div class="input-group">
+                            <div class="input-wrapper">
+                                <input type="text" 
+                                       id="tech-target" 
+                                       class="target-input" 
+                                       placeholder="Enter URL to analyze (e.g., https://example.com)">
+                                <span class="input-icon">🔧</span>
+                            </div>
+                            <button id="tech-detect-btn" class="scan-btn">
+                                🚀 Detect Technologies
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="results-section">
+                        <div class="results-header">
+                            <div class="results-title">
+                                <span class="results-title-icon">🔧</span>
+                                Technology Stack
+                            </div>
+                            <div class="results-stats">
+                                <!-- Stats will be populated dynamically -->
+                            </div>
+                        </div>
+                        <div class="results-body">
+                            <div class="empty-state">
+                                <div class="empty-icon">🔧</div>
+                                <div class="empty-text">Ready to Detect</div>
+                                <div class="empty-hint">Identify web technologies, frameworks, CMS, and services used by the target</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pdf-section">
+                        <button class="pdf-btn">
+                            📥 Generate PDF
+                        </button>
+                    </div>
+                </section>
+                
+                <!-- DNS Recon View -->
+                <section id="dns-recon" class="scan-view">
+                    <div class="input-section">
+                        <div class="input-group">
+                            <div class="input-wrapper">
+                                <input type="text" 
+                                       id="dns-target" 
+                                       class="target-input" 
+                                       placeholder="Enter domain to scan (e.g., example.com)">
+                                <span class="input-icon">🌍</span>
+                            </div>
+                            <button id="dns-recon-btn" class="scan-btn">
+                                🚀 Start Recon
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="results-section">
+                        <div class="results-header">
+                            <div class="results-title">
+                                <span class="results-title-icon">🌍</span>
+                                DNS Records
+                            </div>
+                            <div class="results-stats">
+                                <!-- Stats will be populated dynamically -->
+                            </div>
+                        </div>
+                        <div class="results-body">
+                            <div class="empty-state">
+                                <div class="empty-icon">🌍</div>
+                                <div class="empty-text">Ready to Recon</div>
+                                <div class="empty-hint">Discover DNS records, mail servers, and name servers</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="pdf-section">
+                        <button class="pdf-btn">
+                            📥 Generate PDF
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
