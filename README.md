@@ -205,7 +205,7 @@ All endpoints accept and return JSON (except `/api/generate-pdf` which returns `
 
 | Method | Endpoint | Body | Description |
 |---|---|---|---|
-| `POST` | `/api/vuln-scan` | `{ "target": "https://example.com" }` | Full vulnerability assessment |
+| `POST` | `/api/vuln-scan` | `{ "target": "https://example.com" }` | Security Headers Checkers |
 | `POST` | `/api/port-scan` | `{ "target": "example.com", "scan_type": "quick" }` | Nmap port scan |
 | `POST` | `/api/dir-fuzz` | `{ "target": "https://example.com" }` | Directory fuzzing |
 | `POST` | `/api/tech-detect` | `{ "target": "https://example.com" }` | Technology detection |
