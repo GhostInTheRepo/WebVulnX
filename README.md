@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![WebVulnX Banner](../Style/img/logo.png)
+![WebVulnX Banner](../Style/img/3.png)
 
 **A comprehensive, modular web security assessment platform built with Python & Flask.**
 
