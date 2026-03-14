@@ -20,13 +20,19 @@ class DirectoryFuzzer:
     # Common wordlist for directory fuzzing
     COMMON_PATHS = [
         # Admin paths
-        'admin', 'administrator', 'admin.php', 'admin.html', 'adminpanel',
+        'admin', 'administrator', 'admin.php', 'feedback.php', 'admin.html', 'adminpanel',
         'admin_area', 'admin-console', 'admin-login', 'admin/login',
         'cpanel', 'controlpanel', 'dashboard', 'manager', 'webadmin',
+        'admin/auth-2.inc', 'admin/auth-5.inc', 'admin/auth-6.inc', 'admin/auth-8.inc',
+        'admin/auth-bkp.inc', 'admin/auth-old.inc', 'admin/auth-prod.inc', 'admin/auth-tmp.inc',
+        'admin/auth_1.inc', 'admin/auth_dev.inc', 'admin/auth_old.inc', 'admin/auth_prod.inc', 'admin/auth_tmp.inc',
+        'admin/auth_test.inc',
         
         # Login paths  
-        'login', 'login.php', 'logout.php' 'login.html', 'admin.php' 'signin', 'sign-in',
-        'auth', 'authenticate', 'user/login', 'users/sign_in',
+        'login', 'login.php', 'logout.php', 'login.html', 'admin.php', 'signin', 'sign-in',
+        'auth', 'authenticate', 'user/login', 'users/sign_in', 'login/', 'login/.bak', 
+        'login/.bkp', 'login/.old', 'login/.zip', 'login/.tar.gz', 'login/.tar', 'login/.tar.bz2',
+
         
         # API paths
         'api', 'api/v1', 'api/v2', 'api/v3', 'rest', 'graphql',
@@ -41,15 +47,17 @@ class DirectoryFuzzer:
         'config', 'configuration', 'settings', 'setup', 'install',
         'config.php', 'config.yml', 'config.json', 'settings.php',
         '.env', '.env.backup', '.env.local', '.env.production',
-        'web.config', 'app.config',
+        'web.config', 'app.config', 'setup_mysql.sh',
         
         # Source code
         '.git', '.git/config', '.git/HEAD', '.svn', '.svn/entries',
-        '.hg', '.bzr', 'CVS', '.gitignore', '.htaccess', '.htpasswd',
+        '.hg', '.bzr', 'CVS', '.gitignore', '.htaccess', '.htpasswd', '.htaccess.bak', '.htaccess.bkp', '.htaccess.old', '.htaccess.zip', '.htaccess.tar.gz', '.htaccess.tar', '.htaccess.tar.bz2',
+        '.hta', '.hta.bak', '.hta.bkp', '.hta.old', '.hta.zip', '.hta.tar.gz', '.hta.tar', '.hta.tar.bz2',
+        '.htpasswd.bak', '.htpasswd.bkp', '.htpasswd.old', '.htpasswd.zip', '.htpasswd.tar.gz', '.htpasswd.tar', '.htpasswd.tar.bz2',
         
         # Common directories
-        'assets', 'static', 'public', 'media', 'uploads', 'files',
-        'images', 'img', 'css', 'js', 'scripts', 'fonts',
+        'assets', 'static', 'public', 'media', 'uploads', 'contact-us', 'files',
+        'images', 'images.old', 'img', 'css', 'css.old', 'js', 'scripts', 'fonts', 'about', 'about-us', 
         'includes', 'inc', 'lib', 'libs', 'vendor', 'node_modules',
         
         # CMS specific
@@ -66,7 +74,7 @@ class DirectoryFuzzer:
         'register', 'signup', 'password', 'forgot-password',
         
         # Common files
-        'robots.txt', 'users.txt' 'sitemap.xml', 'sitemap_index.xml', 'humans.txt',
+        'robots.txt', 'users.txt', 'sitemap.xml', 'sitemap_index.xml', 'humans.txt',
         'security.txt', '.well-known/security.txt', 'crossdomain.xml',
         'favicon.ico', 'apple-touch-icon.png',
         
@@ -84,7 +92,8 @@ class DirectoryFuzzer:
     ]
     
     # File extensions to check
-    EXTENSIONS = ['', '.php', '.html', '.htm', '.asp', '.aspx', '.jsp', '.txt', '.bak', '.old', '.zip', '.tar.gz']
+    EXTENSIONS = ['', '.php', '.html', '.yml', '.json', '.sql', '.htm', '.asp', '.aspx', '.jsp', '.txt', '.log', '.config',
+    '.local', '.production', '.bak', '.bkp', '.xml', '.ico', '.png',  '.old', '.zip', '.tar.gz', '.tar', '.tar.bz2', '.gz',]
     
     def __init__(self):
         self.ffuf_available = self._check_ffuf()

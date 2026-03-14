@@ -1,6 +1,5 @@
 """
-WebVulnX - Real Security Scanner
-Performs actual vulnerability scanning with real detection
+WebVulnX - Web Vulnerability Scanner for FYP
 """
 
 import requests
@@ -257,11 +256,6 @@ class RealVulnerabilityScanner:
             header_vulns = self._check_security_headers(target, base_response)
             vulnerabilities.extend(header_vulns)
             
-            # 2. CSRF Check (real)
-            print("[*] Checking for CSRF...")
-            csrf_vulns = self._check_csrf(target, base_response)
-            vulnerabilities.extend(csrf_vulns)
-            
             # 3. CORS Check (real)
             print("[*] Checking CORS configuration...")
             cors_vulns = self._check_cors(target)
@@ -271,16 +265,6 @@ class RealVulnerabilityScanner:
             print("[*] Checking for sensitive files...")
             sensitive_vulns = self._check_sensitive_files(target)
             vulnerabilities.extend(sensitive_vulns)
-            
-            # 5. XSS Check (real)
-            print("[*] Checking for XSS vulnerabilities...")
-            xss_vulns = self._check_xss(target, base_response)
-            vulnerabilities.extend(xss_vulns)
-            
-            # 6. SQL Injection Check (real)
-            print("[*] Checking for SQL Injection...")
-            sqli_vulns = self._check_sqli(target, base_response)
-            vulnerabilities.extend(sqli_vulns)
             
             # 7. LFI Check (real)
             print("[*] Checking for LFI...")
@@ -358,7 +342,7 @@ class RealVulnerabilityScanner:
             info.append({'key': 'Error', 'value': str(e)})
         
         return info
-    
+    # To find the missing security headers.
     def _check_security_headers(self, target: str, response) -> list:
         """Check for missing security headers (REAL)"""
         vulns = []
@@ -392,61 +376,7 @@ class RealVulnerabilityScanner:
                 })
         
         return vulns
-    
-    def _check_csrf(self, target: str, response) -> list:
-        """Check for CSRF vulnerabilities (REAL)"""
-        vulns = []
-        
-        try:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            forms = soup.find_all('form')
-            
-            if not forms:
-                return vulns
-            
-            csrf_patterns = ['csrf', 'token', '_token', 'authenticity_token', 
-                            'csrfmiddlewaretoken', 'xsrf', '__requestverificationtoken']
-            
-            for form in forms:
-                form_action = form.get('action', '')
-                form_method = form.get('method', 'get').lower()
-                
-                # Only check POST forms (CSRF is mainly for state-changing requests)
-                if form_method != 'post':
-                    continue
-                
-                # Check for CSRF token
-                has_csrf = False
-                inputs = form.find_all('input', type='hidden')
-                
-                for inp in inputs:
-                    name = inp.get('name', '').lower()
-                    if any(pattern in name for pattern in csrf_patterns):
-                        has_csrf = True
-                        break
-                
-                if not has_csrf:
-                    vuln = VULN_DATABASE['csrf'].copy()
-                    vulns.append({
-                        'name': vuln['name'],
-                        'severity': vuln['severity'],
-                        'cvss_score': vuln['cvss_score'],
-                        'cvss_vector': vuln['cvss_vector'],
-                        'cwe': vuln['cwe'],
-                        'description': vuln['description'],
-                        'matched_at': target,
-                        'evidence': f'POST form at "{form_action}" lacks CSRF token',
-                        'recommendation': vuln['recommendation'],
-                        'references': vuln['references'],
-                        'type': 'csrf'
-                    })
-                    break  # Report only once
-                    
-        except Exception as e:
-            print(f"    CSRF check error: {e}")
-        
-        return vulns
-    
+    # To find the CSRF logic.
     def _check_cors(self, target: str) -> list:
         """Check for CORS misconfigurations (REAL)"""
         vulns = []
@@ -558,108 +488,6 @@ class RealVulnerabilityScanner:
         ]
         # Check first 1000 chars for efficiency
         return any(indicator in content[:1000] for indicator in soft_404_indicators)
-    
-    def _check_xss(self, target: str, response) -> list:
-        """Check for XSS vulnerabilities (REAL testing)"""
-        vulns = []
-        
-        # Find all input points
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Find URL parameters
-        parsed = urlparse(target)
-        params = parse_qs(parsed.query)
-        
-        # XSS payloads for testing
-        xss_payloads = [
-            {'payload': '<script>alert("XSS")</script>', 'pattern': '<script>alert'},
-            {'payload': '"><img src=x onerror=alert(1)>', 'pattern': 'onerror=alert'},
-            {'payload': "'-alert(1)-'", 'pattern': "'-alert"},
-            {'payload': '<svg onload=alert(1)>', 'pattern': 'onload=alert'}
-        ]
-        
-        # Find input fields and forms
-        inputs = soup.find_all('input', type='text') + soup.find_all('input', type='search')
-        search_params = ['q', 'search', 'query', 's', 'keyword', 'term', 'input', 'name']
-        
-        # Test URL parameters
-        for param in search_params:
-            for xss in xss_payloads[:2]:  # Test first 2 payloads
-                try:
-                    base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-                    test_url = f"{base_url}?{param}={requests.utils.quote(xss['payload'])}"
-                    
-                    resp = self.session.get(test_url, timeout=8)
-                    
-                    if xss['pattern'] in resp.text.lower():
-                        vuln = VULN_DATABASE['xss_reflected'].copy()
-                        vulns.append({
-                            'name': vuln['name'],
-                            'severity': vuln['severity'],
-                            'cvss_score': vuln['cvss_score'],
-                            'cvss_vector': vuln['cvss_vector'],
-                            'cwe': vuln['cwe'],
-                            'description': vuln['description'],
-                            'matched_at': test_url[:100],
-                            'parameter': param,
-                            'evidence': f'XSS payload reflected in response',
-                            'recommendation': vuln['recommendation'],
-                            'references': vuln['references'],
-                            'type': 'xss_reflected'
-                        })
-                        return vulns  # Found one, report it
-                except:
-                    pass
-        
-        return vulns
-    
-    def _check_sqli(self, target: str, response) -> list:
-        """Check for SQL injection (REAL testing)"""
-        vulns = []
-        
-        parsed = urlparse(target)
-        
-        sqli_payloads = [
-            {"payload": "'", "errors": ['sql syntax', 'mysql', 'sqlite', 'postgresql', 'ora-', 'syntax error']},
-            {"payload": "' OR 1=1 -- ", "errors": ['sql', 'mysql', 'error', 'warning', 'you have an error']},
-            {"payload": "1' OR '1'='1", "errors": ['sql', 'mysql', 'error']},
-            {"payload": "1; SELECT * FROM--", "errors": ['sql', 'select', 'from']}
-            
-        ]
-        
-        test_params = ['id', 'user_id', 'uid', 'product_id', 'item', 'page', 'cat', 'category', 'article']
-        
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        
-        for param in test_params:
-            for sqli in sqli_payloads[:1]:  # One payload per param
-                try:
-                    test_url = f"{base_url}?{param}={requests.utils.quote(sqli['payload'])}"
-                    resp = self.session.get(test_url, timeout=10)
-                    resp_lower = resp.text.lower()
-                    
-                    for error in sqli['errors']:
-                        if error in resp_lower:
-                            vuln = VULN_DATABASE['sql_injection'].copy()
-                            vulns.append({
-                                'name': vuln['name'],
-                                'severity': vuln['severity'],
-                                'cvss_score': vuln['cvss_score'],
-                                'cvss_vector': vuln['cvss_vector'],
-                                'cwe': vuln['cwe'],
-                                'description': vuln['description'],
-                                'matched_at': test_url[:100],
-                                'parameter': param,
-                                'evidence': f'SQL error pattern "{error}" found in response',
-                                'recommendation': vuln['recommendation'],
-                                'references': vuln['references'],
-                                'type': 'sql_injection'
-                            })
-                            return vulns  # Critical - stop searching
-                except:
-                    pass
-        
-        return vulns
     
     def _check_lfi(self, target: str) -> list:
         """Check for Local File Inclusion (REAL testing)"""

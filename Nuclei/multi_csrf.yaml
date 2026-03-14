@@ -1,0 +1,105 @@
+id: Multi-CSRF-Detection
+
+info:
+  name: Multi-Type CSRF Misconfiguration Detection
+  author: Hirdesh Chauhan
+  severity: medium
+  description: Detects potential CSRF vulnerabilities including GET-based, POST-based, login, CORS and stored action CSRF risks
+  tags: csrf,cors,misconfiguration,web
+
+http:
+  - raw:
+
+      # ------------------------------------------------
+      # 1. GET-Based CSRF (State-changing GET request)
+      # ------------------------------------------------
+      - |
+        GET /userinfo.php?action=update&email=test@test.com HTTP/1.1
+        Host: {{Hostname}}
+        Origin: http://evil.com
+        Referer: http://evil.com/csrf.html
+
+      # ------------------------------------------------
+      # 2. POST-Based CSRF (No token submission)
+      # ------------------------------------------------
+      - |
+        POST /update-profile.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+        Origin: http://evil.com
+
+        username=test&email=attacker@test.com
+
+      # ------------------------------------------------
+      # 3. Login CSRF Attempt
+      # ------------------------------------------------
+      - |
+        POST /login.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+        Origin: http://evil.com
+
+        uname=attacker&pass=password123
+
+      # ------------------------------------------------
+      # 4. CORS-Based CSRF Check
+      # ------------------------------------------------
+      - |
+        GET / HTTP/1.1
+        Host: {{Hostname}}
+        Origin: http://evil.com
+
+      # ------------------------------------------------
+      # 5. Stored/State-Changing Action CSRF
+      # ------------------------------------------------
+      - |
+        POST /guestbook.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+        Origin: http://evil.com
+
+        name=csrf_test&comment=CSRF_TEST_ENTRY
+
+    redirects: true
+
+    matchers-condition: or
+    matchers:
+
+      # ------------------------------------------------
+      # Missing CSRF protection indicators
+      # ------------------------------------------------
+      - type: word
+        part: body
+        negative: true
+        words:
+          - "csrf_token"
+          - "_token"
+          - "authenticity_token"
+
+      # ------------------------------------------------
+      # Dangerous CORS configuration
+      # ------------------------------------------------
+      - type: word
+        part: header
+        words:
+          - "Access-Control-Allow-Origin: *"
+          - "Access-Control-Allow-Credentials: true"
+
+      # ------------------------------------------------
+      # Successful state change indicators
+      # ------------------------------------------------
+      - type: word
+        part: body
+        words:
+          - "Profile updated"
+          - "Success"
+          - "Logged in"
+          - "Thank you"
+
+      # ------------------------------------------------
+      # Successful HTTP response
+      # ------------------------------------------------
+      - type: status
+        status:
+          - 200
+          - 302

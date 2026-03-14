@@ -14,7 +14,9 @@ const state = {
         portScan: null,
         dirFuzz: null,
         techDetect: null,
-        dnsRecon: null
+        dnsRecon: null,
+        nucleiScan: null,
+        dmarcScan: null
     },
     isScanning: false
 };
@@ -87,6 +89,14 @@ function setupEventListeners() {
     document.getElementById('dir-fuzz-btn')?.addEventListener('click', runDirFuzz);
     document.getElementById('tech-detect-btn')?.addEventListener('click', runTechDetect);
     document.getElementById('dns-recon-btn')?.addEventListener('click', runDNSRecon);
+    document.getElementById('nuclei-scan-btn')?.addEventListener('click', runNucleiScan);
+    document.getElementById('dmarc-scan-btn')?.addEventListener('click', runDmarcScan);
+
+    // Modal close
+    document.getElementById('modal-close-btn')?.addEventListener('click', closeNucleiModal);
+    document.getElementById('nuclei-modal')?.addEventListener('click', (e) => {
+        if (e.target.id === 'nuclei-modal') closeNucleiModal();
+    });
 
     // PDF buttons
     document.querySelectorAll('.pdf-btn').forEach(btn => {
@@ -177,7 +187,7 @@ async function runPortScan() {
 
     const target = input.value.trim();
     if (!target) {
-        showToast('Please enter a target', 'warning');
+        showToast('Please enter a target URL', 'warning');
         input.focus();
         return;
     }
@@ -199,8 +209,9 @@ async function runPortScan() {
 
         if (data.success) {
             state.scanResults.portScan = data.results;
+            const openPortsCount = (data.results.ports || []).filter(p => (p.state || '').toUpperCase() === 'OPEN' || (p.status || '').toUpperCase() === 'OPEN').length;
             renderPortResults(data.results);
-            showToast(`Found ${data.results.open_ports || 0} open ports`, 'success');
+            showToast(`Found ${openPortsCount} open ports`, 'success');
         } else {
             throw new Error(data.error || 'Scan failed');
         }
@@ -339,13 +350,99 @@ async function runDNSRecon() {
 }
 
 /**
+ * Run Nuclei Scan
+ */
+async function runNucleiScan() {
+    const input = document.getElementById('nuclei-target');
+    const btn = document.getElementById('nuclei-scan-btn');
+    const resultsBody = document.querySelector('#nuclei-scan .results-body');
+
+    const target = input.value.trim();
+    if (!target) {
+        showToast('Please enter a target URL or IP', 'warning');
+        input.focus();
+        return;
+    }
+
+    setButtonLoading(btn, true, 'Scanning...');
+    showLoading(resultsBody, 'Running Nuclei templates...', 'nuclei');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/nuclei-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            state.scanResults.nucleiScan = data.results;
+            renderNucleiResults(data.results);
+            showToast(`Scan complete! Found ${data.results.count || 0} findings`, 'success');
+        } else {
+            throw new Error(data.error || 'Scan failed');
+        }
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+        renderError(resultsBody, error.message);
+    } finally {
+        stopProgress();
+        setButtonLoading(btn, false, 'Nuclei Scan');
+    }
+}
+
+/**
+ * Run DMARC Scan
+ */
+async function runDmarcScan() {
+    const input = document.getElementById('dmarc-target');
+    const btn = document.getElementById('dmarc-scan-btn');
+    const resultsBody = document.querySelector('#dmarc-scan .results-body');
+
+    const target = input.value.trim();
+    if (!target) {
+        showToast('Please enter a target domain', 'warning');
+        input.focus();
+        return;
+    }
+
+    setButtonLoading(btn, true, 'Scanning...');
+    showLoading(resultsBody, 'Analyzing DMARC configuration...', 'dmarc');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/dmarc-scan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            state.scanResults.dmarcScan = data.results;
+            renderDmarcResults(data.results);
+            showToast('DMARC Analysis complete', 'success');
+        } else {
+            throw new Error(data.error || 'Scan failed');
+        }
+    } catch (error) {
+        showToast(`Error: ${error.message}`, 'error');
+        renderError(resultsBody, error.message);
+    } finally {
+        stopProgress();
+        setButtonLoading(btn, false, 'Scan DMARC');
+    }
+}
+
+/**
  * Generate PDF report
  */
 async function generatePDF() {
     const results = state.scanResults;
 
     // Check if we have any results
-    if (!results.vulnScan && !results.portScan && !results.dirFuzz && !results.techDetect && !results.dnsRecon) {
+    if (!results.vulnScan && !results.portScan && !results.dirFuzz && !results.techDetect && !results.dnsRecon && !results.nucleiScan && !results.dmarcScan) {
         showToast('No scan results to export. Run a scan first.', 'warning');
         return;
     }
@@ -355,9 +452,11 @@ async function generatePDF() {
     try {
         // Prepare data
         const reportData = {
-            target: results.vulnScan?.target || results.portScan?.target ||
+            target: results.nucleiScan?.target || results.dmarcScan?.target || results.vulnScan?.target || results.portScan?.target ||
                 results.dirFuzz?.target || results.techDetect?.target || 'Unknown',
             vuln_scan: results.vulnScan,
+            nuclei_scan: results.nucleiScan,
+            dmarc_scan: results.dmarcScan,
             port_scan: results.portScan,
             dir_fuzz: results.dirFuzz,
             tech_detect: results.techDetect,
@@ -503,8 +602,10 @@ function renderPortResults(results) {
     // Update stats
     const statsContainer = document.querySelector('#port-scan .results-stats');
     if (statsContainer) {
+        // Count only ports with status "OPEN"
+        const openCount = ports.filter(port => (port.state || '').toUpperCase() === 'OPEN' || (port.status || '').toUpperCase() === 'OPEN').length;
         statsContainer.innerHTML = `
-            <span class="stat-badge info">🔌 ${results.open_ports || 0} Open</span>
+            <span class="stat-badge info">👁 ${openCount} Open</span>
             <span class="stat-badge">⏱️ ${results.scan_time || 0}s</span>
         `;
     }
@@ -608,16 +709,27 @@ function renderDirResults(results) {
         `;
     }
 
+    // Normalize base URL
+    let baseUrl = results.target || '';
+    if (baseUrl && !baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+        baseUrl = 'http://' + baseUrl;
+    }
+    // Remove trailing slash for consistent joining
+    baseUrl = baseUrl.replace(/\/$/, '');
+
     container.innerHTML = infoHtml + `
         <div class="dir-list">
-            ${discovered.map((item, index) => `
+            ${discovered.map((item, index) => {
+                const fullUrl = `${baseUrl}/${item.path}`;
+                return `
                 <div class="dir-item animate-slide-up stagger-${Math.min(index + 1, 5)}">
-                    <span class="dir-path">/${escapeHtml(item.path)}</span>
+                    <a href="${escapeHtml(fullUrl)}" target="_blank" rel="noopener noreferrer" class="dir-path">/${escapeHtml(item.path)}</a>
                     <span class="dir-status ${getStatusClass(item.status)}">${item.status}</span>
                     <span class="dir-size">${formatBytes(item.length)}</span>
                     <span class="dir-type">${escapeHtml(item.type || 'other')}</span>
                 </div>
-            `).join('')}
+                `;
+            }).join('')}
         </div>
     `;
 }
@@ -694,6 +806,189 @@ function renderTechResults(results) {
 }
 
 /**
+ * Render Nuclei Scan Results
+ */
+function renderNucleiResults(results) {
+    const container = document.querySelector('#nuclei-scan .results-body');
+    const findings = results.findings || [];
+
+    // Update stats
+    const statsContainer = document.querySelector('#nuclei-scan .results-stats');
+    if (statsContainer) {
+        statsContainer.innerHTML = `
+            <span class="stat-badge info">⚛️ ${results.count || 0} Findings</span>
+        `;
+    }
+
+    if (findings.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">✅</div>
+                <div class="empty-text">No vulnerabilities detected</div>
+                <div class="empty-hint">The target appears to be secure based on current templates.</div>
+            </div>
+        `;
+        return;
+    }
+
+    // Assign globally to be accessible by inline onclick
+    window.currentNucleiFindings = findings;
+
+    // Create Table
+    let tableHtml = `
+        <div class="nuclei-filter-bar">
+            <div class="filter-dropdown-container nuclei-filter-container">
+                <button class="filter-btn" onclick="toggleNucleiFilterDropdown(event)">
+                    🎯 Filter Severity
+                </button>
+                <div class="filter-dropdown" id="nuclei-severity-dropdown">
+                    <div class="filter-option" onclick="filterNucleiSeverity('all')">All</div>
+                    <div class="filter-option" onclick="filterNucleiSeverity('low')">🟢 Low</div>
+                    <div class="filter-option" onclick="filterNucleiSeverity('medium')">🟡 Medium</div>
+                    <div class="filter-option" onclick="filterNucleiSeverity('high')">🟠 High</div>
+                    <div class="filter-option" onclick="filterNucleiSeverity('critical')">🔴 Critical</div>
+                </div>
+            </div>
+        </div>
+        <div class="nuclei-table-container animate-slide-up">
+            <table class="nuclei-table">
+                <thead>
+                    <tr>
+                        <th>Template</th>
+                        <th>URL</th>
+                        <th>Method</th>
+                        <th>Severity</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    findings.forEach((finding, index) => {
+        let sevClass = finding.severity.toLowerCase();
+
+        tableHtml += `
+            <tr class="stagger-${Math.min((index % 5) + 1, 5)}">
+                <td class="nuclei-template-col">${escapeHtml(finding.template)}</td>
+                <td class="nuclei-url-col" title="${escapeHtml(finding.url)}">${escapeHtml(finding.url)}</td>
+                <td class="nuclei-method-col">${escapeHtml(finding.method)}</td>
+                <td><span class="severity-badge ${sevClass}">${escapeHtml(finding.severity)}</span></td>
+                <td>
+                    <button class="view-action-btn" onclick="openNucleiModal(${index})">View</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    tableHtml += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.innerHTML = tableHtml;
+}
+
+window.openNucleiModal = function (index) {
+    if (!window.currentNucleiFindings || !window.currentNucleiFindings[index]) return;
+    const finding = window.currentNucleiFindings[index];
+
+    document.getElementById('modal-vuln-type').textContent = finding.type || 'Vulnerability Details';
+    document.getElementById('modal-template').textContent = finding.template;
+    document.getElementById('modal-url').textContent = finding.url;
+    document.getElementById('modal-description').textContent = finding.description || 'No description provided.';
+    document.getElementById('modal-recommendation').textContent = finding.recommendation || 'No recommendation provided.';
+
+    document.getElementById('nuclei-modal').style.display = 'flex';
+};
+
+window.closeNucleiModal = function () {
+    document.getElementById('nuclei-modal').style.display = 'none';
+};
+
+/**
+ * Render DMARC Results
+ */
+function renderDmarcResults(results) {
+    const container = document.querySelector('#dmarc-scan .results-body');
+    const statsContainer = document.querySelector('#dmarc-scan .results-stats');
+    
+    // Status Badge Setup
+    const protectionLevel = results.protection_level || 'Weak';
+    let badgeClass = 'danger'; // Weak default
+    let icon = '✘';
+    let titleMsg = 'No Record Found';
+    
+    if (results.record_found) {
+        icon = '✔';
+        titleMsg = 'Record Found';
+        if (protectionLevel === 'Strong') badgeClass = 'success';
+        if (protectionLevel === 'Moderate') badgeClass = 'warning';
+        // None/Weak stays 'danger' or fallback
+        if (protectionLevel === 'Weak' && badgeClass === 'danger') badgeClass = 'danger';
+    }
+
+    if (statsContainer) {
+        statsContainer.innerHTML = `<span class="stat-badge ${badgeClass}">${icon} ${protectionLevel} Protection</span>`;
+    }
+
+    let html = `
+        <div class="info-grid single-col animate-slide-up">
+            <div class="info-card">
+                <div class="info-card-header">
+                    <span class="info-card-title">DMARC Status</span>
+                </div>
+                <div class="info-card-content">
+                    <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                        <span style="color: var(--accent-${badgeClass === 'success' ? 'green' : (badgeClass === 'warning' ? 'orange' : 'red')}); font-size: 20px;">
+                            ${icon}
+                        </span> 
+                        ${titleMsg}
+                    </div>
+                    
+                    <div style="display: grid; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                        <div style="display: flex; gap: 12px; align-items: start;">
+                            <span style="color: var(--text-muted); min-width: 120px;">Policy:</span>
+                            <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 500;">
+                                ${escapeHtml(results.policy)}
+                            </span>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: start;">
+                            <span style="color: var(--text-muted); min-width: 120px;">Reports (RUA):</span>
+                            <span style="color: var(--text-primary);">
+                                ${results.reports ? escapeHtml(results.reports) : '<i>Not configured</i>'}
+                            </span>
+                        </div>
+                        <div style="display: flex; gap: 12px; align-items: start;">
+                            <span style="color: var(--text-muted); min-width: 120px;">Protection Level:</span>
+                            <span class="severity-badge ${badgeClass === 'success' ? 'low' : (badgeClass === 'warning' ? 'medium' : 'critical')}" style="padding: 4px 8px;">
+                                ${escapeHtml(protectionLevel)}
+                            </span>
+                        </div>
+                    </div>
+    `;
+
+    if (results.raw_record) {
+        html += `
+            <div style="margin-top: 20px; text-align: left;">
+                <span style="color: var(--text-muted); display: block; margin-bottom: 8px; font-size: 13px;">Raw TXT Record:</span>
+                <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); word-break: break-all; border-left: 2px solid var(--accent-purple);">
+                    ${escapeHtml(results.raw_record)}
+                </div>
+            </div>
+        `;
+    }
+
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+/**
  * Set button loading state
  */
 function setButtonLoading(btn, loading, text) {
@@ -703,7 +998,7 @@ function setButtonLoading(btn, loading, text) {
     btn.classList.toggle('scanning', loading);
     btn.innerHTML = loading
         ? `<span class="spinner"></span> ${text}`
-        : `🚀 ${text}`;
+        : ` ${text}`;
 }
 
 /**
@@ -732,17 +1027,14 @@ function showLoading(container, message = 'Loading...', scanType = 'vuln') {
                 { percent: 98, text: 'Generating report...' }
             ],
             modules: [
-                { id: 'headers', label: '🛡️ Headers', index: 0 },
-                { id: 'csrf', label: '🔒 CSRF', index: 1 },
-                { id: 'xss', label: '💉 XSS', index: 2 },
-                { id: 'sqli', label: '🗄️ SQLi', index: 3 },
-                { id: 'files', label: '📁 Files', index: 4 },
-                { id: 'ssl', label: '🔐 SSL', index: 5 }
+                { id: 'headers', label: 'Headers', index: 0 },
+                { id: 'files', label: 'Files', index: 4 },
+                { id: 'ssl', label: 'SSL', index: 5 }
             ]
         },
         'port': {
             title: 'Port Scan in Progress',
-            icon: '🔌',
+            icon: '👁',
             stages: [
                 { percent: 0, text: 'Initializing scanner...' },
                 { percent: 15, text: 'Resolving IP address...' },
@@ -752,12 +1044,12 @@ function showLoading(container, message = 'Loading...', scanType = 'vuln') {
                 { percent: 98, text: 'Finalizing...' }
             ],
             modules: [
-                { id: 'open_ports', label: '🔌 Open Ports', index: 0 }
+                { id: 'open_ports', label: '👁 Open Ports', index: 0 }
             ]
         },
         'dir': {
             title: 'Directory Fuzzing in Progress',
-            icon: '📁',
+            icon: '📂',
             stages: [
                 { percent: 0, text: 'Initializing fuzzer...' },
                 { percent: 20, text: 'Fuzzing directories...' },
@@ -767,11 +1059,11 @@ function showLoading(container, message = 'Loading...', scanType = 'vuln') {
                 { percent: 98, text: 'Finalizing...' }
             ],
             modules: [
-                { id: 'dir_enum', label: '📂 Directory Enumeration', index: 0 },
-                { id: 'file_enum', label: '📄 File Enumeration', index: 1 },
-                { id: 'hidden', label: '👻 Hidden Paths', index: 2 },
-                { id: 'sensitive', label: '🔒 Sensitive Files', index: 3 },
-                { id: 'http_status', label: '📊 HTTP Status Analysis', index: 4 }
+                { id: 'dir_enum', label: 'Directory Enumeration', index: 0 },
+                { id: 'file_enum', label: 'File Enumeration', index: 1 },
+                { id: 'hidden', label: 'Hidden Paths', index: 2 },
+                { id: 'sensitive', label: 'Sensitive Files', index: 3 },
+                { id: 'http_status', label: 'HTTP Status Analysis', index: 4 }
             ]
         },
         'tech': {
@@ -786,11 +1078,11 @@ function showLoading(container, message = 'Loading...', scanType = 'vuln') {
                 { percent: 98, text: 'Finalizing...' }
             ],
             modules: [
-                { id: 'server', label: '🌐 Web Server Detection', index: 0 },
-                { id: 'lang', label: '💻 Programming Language', index: 1 },
-                { id: 'framework', label: '🏗️ Framework Detection', index: 2 },
-                { id: 'cms', label: '📝 CMS Detection', index: 3 },
-                { id: 'js_lib', label: '📜 JavaScript Libraries', index: 4 }
+                { id: 'server', label: 'Web Server Detection', index: 0 },
+                { id: 'lang', label: 'Programming Language', index: 1 },
+                { id: 'framework', label: 'Framework Detection', index: 2 },
+                { id: 'cms', label: 'CMS Detection', index: 3 },
+                { id: 'js_lib', label: 'JavaScript Libraries', index: 4 }
             ]
         },
         'dns': {
@@ -804,8 +1096,38 @@ function showLoading(container, message = 'Loading...', scanType = 'vuln') {
                 { percent: 98, text: 'Finalizing...' }
             ],
             modules: [
-                { id: 'dns_rec', label: '📋 DNS Records', index: 0 },
-                { id: 'subdomains', label: '🌐 Subdomain Enumeration', index: 1 }
+                { id: 'dns_rec', label: 'DNS Records', index: 0 },
+                { id: 'subdomains', label: 'Subdomain Enumeration', index: 1 }
+            ]
+        },
+        'nuclei': {
+            title: 'Nuclei Scan in Progress',
+            icon: '⚛️',
+            stages: [
+                { percent: 0, text: '✔ Initializing scan' },
+                { percent: 30, text: '⏳ Running templates' },
+                { percent: 60, text: '⏳ Collecting findings' },
+                { percent: 90, text: '⏳ Processing results' }
+            ],
+            modules: [
+                { id: 'n_templates', label: 'Running Vulnerability Templates', index: 0 },
+                { id: 'n_checks', label: 'Loading Security Checks', index: 1 },
+                { id: 'n_responses', label: 'Analyzing Target Responses', index: 2 }
+            ]
+        },
+        'dmarc': {
+            title: 'DMARC Policy Check in Progress',
+            icon: '📧',
+            stages: [
+                { percent: 0, text: 'Initializing DMARC scanner...' },
+                { percent: 30, text: 'Querying DNS for DMARC record...' },
+                { percent: 60, text: 'Analyzing policy configuration...' },
+                { percent: 85, text: 'Evaluating protection level...' },
+                { percent: 98, text: 'Finalizing report...' }
+            ],
+            modules: [
+                { id: 'dmarc_rec', label: 'DMARC Record', index: 0 },
+                { id: 'dmarc_pol', label: 'Policy Analysis', index: 1 }
             ]
         }
     };
@@ -952,7 +1274,7 @@ function getVulnIcon(type) {
         header: '📋',
         exposure: '🔓',
         info_disclosure: 'ℹ️',
-        nuclei: '☢️'
+        nuclei: '⚛️'
     };
     return icons[type] || '🔍';
 }
@@ -1113,11 +1435,15 @@ function toggleFilterDropdown(e) {
     }
 }
 
-// Close dropdown when clicking outside
+// Close dropdowns when clicking outside
 document.addEventListener('click', (e) => {
-    const dropdown = document.getElementById('path-filter-dropdown');
-    if (dropdown && dropdown.classList.contains('show') && !e.target.closest('.filter-dropdown-container')) {
-        dropdown.classList.remove('show');
+    const pathDropdown = document.getElementById('path-filter-dropdown');
+    if (pathDropdown && pathDropdown.classList.contains('show') && !e.target.closest('.filter-dropdown-container')) {
+        pathDropdown.classList.remove('show');
+    }
+    const nucleiDropdown = document.getElementById('nuclei-severity-dropdown');
+    if (nucleiDropdown && nucleiDropdown.classList.contains('show') && !e.target.closest('.nuclei-filter-container')) {
+        nucleiDropdown.classList.remove('show');
     }
 });
 
@@ -1212,4 +1538,50 @@ function updateThemeUI(isLight) {
         text.textContent = 'Dark Mode';
         elements.themeToggle.setAttribute('aria-label', 'Switch to Light Mode');
     }
+}
+
+/**
+ * Toggle Nuclei severity filter dropdown
+ */
+function toggleNucleiFilterDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('nuclei-severity-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+    }
+}
+
+/**
+ * Filter Nuclei findings by severity
+ */
+function filterNucleiSeverity(severity) {
+    const rows = document.querySelectorAll('#nuclei-scan .nuclei-table tbody tr');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const badge = row.querySelector('.severity-badge');
+        if (!badge) return;
+        const rowSeverity = badge.textContent.trim().toLowerCase();
+
+        if (severity === 'all' || rowSeverity === severity.toLowerCase()) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Dynamically update findings counter
+    const statsContainer = document.querySelector('#nuclei-scan .results-stats');
+    if (statsContainer) {
+        statsContainer.innerHTML = `<span class="stat-badge info">⚛️ ${visibleCount} Findings</span>`;
+    }
+
+    // Close the dropdown
+    const dropdown = document.getElementById('nuclei-severity-dropdown');
+    if (dropdown) dropdown.classList.remove('show');
+
+    // Show feedback toast
+    const label = severity === 'all' ? 'All Severities' : severity.charAt(0).toUpperCase() + severity.slice(1);
+    showToast(`Filter applied: ${label}`, 'info');
 }

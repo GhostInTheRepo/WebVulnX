@@ -13,10 +13,10 @@ from io import BytesIO
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from scanners import nuclei_scanner, nmap_scanner, dir_fuzzer, tech_detector, dns_recon
+from Backend import scanner, port_scanner, dir_fuzzer, tech_detector, dns_recon, nuclei_scanner, dmarc_scanner
 from utils import pdf_generator
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='Frontend', static_folder='Style')
 CORS(app)
 
 # Store scan results in memory (for demo purposes)
@@ -61,7 +61,7 @@ def vulnerability_scan():
             target = 'https://' + target
         
         # Run scan
-        results = nuclei_scanner.scan(target)
+        results = scanner.scan(target)
         
         # Store results
         scan_id = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -73,6 +73,45 @@ def vulnerability_scan():
             'results': results
         })
         
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/nuclei-scan', methods=['POST'])
+def nuclei_scan():
+    """
+    Run Nuclei scan
+    
+    Expected JSON body:
+    {
+        "target": "https://example.com"
+    }
+    """
+    try:
+        data = request.get_json()
+        target = data.get('target', '').strip()
+        
+        if not target:
+            return jsonify({'error': 'Target URL is required'}), 400
+        
+        # Run scan using the newly created module
+        results = nuclei_scanner.scan(target)
+        
+        # Store results
+        if 'error' not in results:
+            scan_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+            scan_results_store[f'nuclei_{scan_id}'] = results
+            
+            return jsonify({
+                'success': True,
+                'scan_id': scan_id,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': results['error']
+            }), 500
+            
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -97,7 +136,7 @@ def port_scan():
             return jsonify({'error': 'Target is required'}), 400
         
         # Run scan
-        results = nmap_scanner.scan(target, scan_type)
+        results = port_scanner.scan(target, scan_type)
         
         # Store results
         scan_id = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -225,6 +264,46 @@ def dns_reconnaissance():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/dmarc-scan', methods=['POST'])
+def dmarc_scan_endpoint():
+    """
+    Run DMARC scanner
+    
+    Expected JSON body:
+    {
+        "target": "example.com"
+    }
+    """
+    try:
+        data = request.get_json()
+        target = data.get('target', '').strip()
+        
+        if not target:
+            return jsonify({'error': 'Target domain is required'}), 400
+            
+        # Run scan
+        results = dmarc_scanner.scan(target)
+        
+        # Store results
+        if 'error' not in results:
+            scan_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+            scan_results_store[f'dmarc_{scan_id}'] = results
+            
+            return jsonify({
+                'success': True,
+                'scan_id': scan_id,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': results['error']
+            }), 500
+            
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/generate-pdf', methods=['POST'])
 def generate_pdf():
     """
@@ -320,12 +399,12 @@ def scan_all():
         
         # Run all scans
         try:
-            results['vuln_scan'] = nuclei_scanner.scan(target)
+            results['vuln_scan'] = scanner.scan(target)
         except Exception as e:
             results['vuln_scan'] = {'error': str(e)}
         
         try:
-            results['port_scan'] = nmap_scanner.scan(target, 'common')
+            results['port_scan'] = port_scanner.scan(target, 'common')
         except Exception as e:
             results['port_scan'] = {'error': str(e)}
         
@@ -369,18 +448,20 @@ if __name__ == '__main__':
     print("""
     ╔═══════════════════════════════════════════════════════════╗
     ║                                                           ║
-    ║   🛡️  WEBVULNX - Security Scanner                         ║
+    ║   🛡️  WEBVULNX - Security Scanner                        ║
     ║                                                           ║
     ║   Starting server at http://localhost:5000                ║
     ║                                                           ║
     ║   Available endpoints:                                    ║
     ║   • POST /api/vuln-scan    - Vulnerability scanning       ║
-    ║   • POST /api/port-scan    - Port scanning               ║
-    ║   • POST /api/dir-fuzz     - Directory fuzzing           ║
-    ║   • POST /api/tech-detect  - Technology detection        ║
-    ║   • POST /api/dns-recon    - DNS Reconnaissance          ║
-    ║   • POST /api/generate-pdf - Generate PDF report         ║
-    ║   • POST /api/scan-all     - Run all scans               ║
+    ║   • POST /api/port-scan    - Port scanning                ║
+    ║   • POST /api/dir-fuzz     - Directory fuzzing            ║
+    ║   • POST /api/tech-detect  - Technology detection         ║
+    ║   • POST /api/dns-recon    - DNS Reconnaissance           ║
+    ║   • POST /api/nuclei-scan  - Nuclei scanning              ║
+    ║   • POST /api/dmarc-scan   - DMARC scanning               ║    
+    ║   • POST /api/generate-pdf - Generate PDF report          ║
+    ║   • POST /api/scan-all     - Run all scans                ║
     ║                                                           ║
     ╚═══════════════════════════════════════════════════════════╝
     """)

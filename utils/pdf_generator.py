@@ -150,6 +150,13 @@ class VulnerabilityXPDFReport:
             # Vulnerability Findings
             if scan_results.get('vuln_scan'):
                 story.extend(self._create_vulnerability_section(scan_results['vuln_scan']))
+                
+            # Nuclei Scan Results
+            if scan_results.get('nuclei_scan'):
+                # Avoid page break if we just started, but usually good to isolate
+                if scan_results.get('vuln_scan'):
+                    story.append(PageBreak())
+                story.extend(self._create_nuclei_section(scan_results['nuclei_scan']))
             
             # Port Scan Results
             if scan_results.get('port_scan'):
@@ -170,6 +177,11 @@ class VulnerabilityXPDFReport:
             if scan_results.get('dns_recon'):
                 story.append(PageBreak())
                 story.extend(self._create_dns_section(scan_results['dns_recon']))
+                
+            # DMARC Scanner
+            if scan_results.get('dmarc_scan'):
+                story.append(PageBreak())
+                story.extend(self._create_dmarc_section(scan_results['dmarc_scan']))
             
             # Footer/Appendix
             story.append(PageBreak())
@@ -464,6 +476,133 @@ class VulnerabilityXPDFReport:
             elements.append(Spacer(1, 5))
             elements.append(Paragraph("─" * 70, ParagraphStyle(name='Sep', fontSize=6, textColor=colors.lightgrey)))
         
+        return elements
+
+    def _create_nuclei_section(self, nuclei_data: Dict[str, Any]) -> List:
+        """Create a targeted section for Nuclei Engine findings specifically"""
+        elements = []
+        
+        elements.append(Paragraph("☢️ NUCLEI SCAN FINDINGS", self.styles['SectionTitle']))
+        
+        findings = nuclei_data.get('findings', [])
+        
+        if not findings:
+            elements.append(Paragraph(
+                "✅ No vulnerabilities were detected by the Nuclei engine.",
+                self.styles['BodyText']
+            ))
+            return elements
+            
+        elements.append(Paragraph(
+            f"Vulnerabilities Identified: <b>{nuclei_data.get('count', len(findings))}</b>",
+            self.styles['BodyText']
+        ))
+        
+        for i, vuln in enumerate(findings, 1):
+            severity = vuln.get('severity', 'info').lower()
+            color = SEVERITY_COLORS.get(severity, colors.gray)
+            
+            elements.append(Spacer(1, 10))
+            elements.append(Paragraph(
+                f"<font color='{color.hexval()}'>[{severity.upper()}]</font> "
+                f"<b>{vuln.get('type', 'Vulnerability')} ({vuln.get('template', 'Unknown Template')})</b>",
+                self.styles['VulnTitle']
+            ))
+            
+            # Request Data
+            url = vuln.get('url', 'N/A')
+            method = vuln.get('method', 'N/A')
+            elements.append(Paragraph(
+                f"<b>Target:</b> {method} {url}",
+                ParagraphStyle(name='ReqLine', fontSize=10, textColor=colors.gray, leftIndent=10)
+            ))
+            
+            if vuln.get('description'):
+                elements.append(Paragraph(
+                    f"<b>Description:</b> {vuln.get('description', '')}",
+                    self.styles['BodyText']
+                ))
+            
+            # Extracted Info / Evidence
+            extracted = vuln.get('extracted_results')
+            if extracted:
+                elements.append(Paragraph("<b>Extracted Evidence:</b>", self.styles['SmallText']))
+                if isinstance(extracted, list):
+                    for ex in extracted[:3]:
+                        elements.append(Paragraph(str(ex), self.styles['CodeText']))
+                else:
+                    elements.append(Paragraph(str(extracted), self.styles['CodeText']))
+            
+            # Recommendations
+            rec = vuln.get('recommendation')
+            if rec:
+                elements.append(Paragraph("<b>Recommendations:</b>", self.styles['SmallText']))
+                for step in str(rec).split('\n'):
+                    if step.strip():
+                        elements.append(Paragraph(
+                            f"✓ {step.strip()}",
+                            ParagraphStyle(name='NucRec', fontSize=9, leftIndent=15, textColor=BRAND_COLORS['success'])
+                        ))
+            
+            elements.append(Spacer(1, 5))
+            elements.append(Paragraph("─" * 70, ParagraphStyle(name='Sep2', fontSize=6, textColor=colors.lightgrey)))
+            
+        return elements
+    
+    def _create_dmarc_section(self, dmarc_data: Dict[str, Any]) -> List:
+        """Create a targeted section for DMARC Scanner output"""
+        elements = []
+        
+        elements.append(Paragraph("📧 DMARC SECURITY POLICY", self.styles['SectionTitle']))
+        
+        protection_level = dmarc_data.get('protection_level', 'Weak')
+        record_found = dmarc_data.get('record_found', False)
+        
+        # Determine Color context
+        if protection_level == 'Strong':
+            color = BRAND_COLORS['success']
+        elif protection_level == 'Moderate':
+            color = BRAND_COLORS['warning']
+        else:
+            color = BRAND_COLORS['danger']
+            
+        # Context block
+        header = f"<font color='{color.hexval()}'><b>{protection_level.upper()} PROTECTION</b></font>"
+        if record_found:
+            elements.append(Paragraph(f"DMARC Record Found — {header}", self.styles['BodyText']))
+        else:
+            elements.append(Paragraph(f"No DMARC Record Found — {header}", self.styles['BodyText']))
+            
+        elements.append(Spacer(1, 15))
+        
+        # Policy Table
+        policy_data = [
+            ['Configuration attribute', 'Value'],
+            ['Policy Execution (p=)', dmarc_data.get('policy', 'None explicitly defined')],
+            ['Reporting RUA (rua=)', dmarc_data.get('reports', 'Not configured')]
+        ]
+        
+        policy_table = Table(policy_data, colWidths=[200, 250])
+        policy_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), BRAND_COLORS['secondary']),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        
+        elements.append(policy_table)
+        elements.append(Spacer(1, 15))
+        
+        # Raw Output Block
+        raw_rec = dmarc_data.get('raw_record')
+        if raw_rec:
+            elements.append(Paragraph("<b>Raw DNS TXT Record:</b>", self.styles['SmallText']))
+            elements.append(Paragraph(str(raw_rec), self.styles['CodeText']))
+            
         return elements
     
     def _create_port_section(self, port_data: Dict[str, Any]) -> List:

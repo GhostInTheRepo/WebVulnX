@@ -1,0 +1,88 @@
+id: Advanced-CSRF-Detection
+
+info:
+  name: Advanced CSRF Protection Detection
+  author: Hirdesh Chauhan
+  severity: medium
+  description: Detects missing or weak CSRF protection by extracting tokens and testing requests without them
+  tags: csrf,token,security,misconfiguration
+
+http:
+  # ------------------------------------------------
+  # STEP 1 — Load page and extract CSRF tokens
+  # ------------------------------------------------
+  - method: GET
+    path:
+      - "{{BaseURL}}/login.php"
+      - "{{BaseURL}}/userinfo.php"
+
+    extractors:
+      - type: regex
+        name: csrf_token
+        part: body
+        internal: true
+        regex:
+          - 'name=["'']?(csrf_token|_token|authenticity_token)["'']?\s*value=["'']([^"''>]+)'
+
+  # ------------------------------------------------
+  # STEP 2 — Send POST request WITHOUT token
+  # ------------------------------------------------
+  - raw:
+      - |
+        POST /login.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+        Origin: http://evil.com
+        Referer: http://evil.com/csrf.html
+
+        uname=test&pass=test123
+
+      - |
+        POST /update-profile.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+        Origin: http://evil.com
+
+        username=csrfuser&email=attacker@test.com
+
+    redirects: true
+
+    matchers-condition: or
+    matchers:
+
+      # ---------------------------------------------
+      # Form exists but token not enforced
+      # ---------------------------------------------
+      - type: dsl
+        dsl:
+          - "len(csrf_token)==0"
+
+      # ---------------------------------------------
+      # Successful action indicators
+      # ---------------------------------------------
+      - type: word
+        part: body
+        words:
+          - "Logged in"
+          - "Welcome"
+          - "Profile updated"
+          - "Success"
+          - "Thank you"
+
+      # ---------------------------------------------
+      # Dangerous CORS allowing CSRF
+      # ---------------------------------------------
+      - type: word
+        part: header
+        condition: or
+        words:
+          - "Access-Control-Allow-Origin: *"
+          - "Access-Control-Allow-Credentials: true"
+
+      # ---------------------------------------------
+      # Accepting cross-origin request
+      # ---------------------------------------------
+      - type: status
+        status:
+          - 200
+          - 302

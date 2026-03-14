@@ -1,0 +1,75 @@
+id: Multi-XSS-Detection
+
+info:
+  name: Stored, Reflected and DOM XSS Detection
+  author: Hirdesh Chauhan
+  severity: high
+  description: Detects Reflected, Stored and DOM-based Cross-Site Scripting vulnerabilities
+  tags: xss,stored,reflected,dom,injection
+
+http:
+  - raw:
+
+      # -----------------------------------------
+      # 1. Reflected XSS Payloads
+      # -----------------------------------------
+      - |
+        GET /?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E HTTP/1.1
+        Host: {{Hostname}}
+
+      - |
+        GET /?search=%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E HTTP/1.1
+        Host: {{Hostname}}
+
+      # -----------------------------------------
+      # 2. Stored XSS Payload (form submission)
+      # -----------------------------------------
+      - |
+        POST /guestbook.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        name=test&comment=%3Cscript%3Ealert(document.domain)%3C%2Fscript%3E
+
+      # -----------------------------------------
+      # 3. DOM-Based XSS Probe
+      # -----------------------------------------
+      - |
+        GET /#%3Cscript%3Ealert(1)%3C%2Fscript%3E HTTP/1.1
+        Host: {{Hostname}}
+
+    redirects: true
+
+    matchers-condition: or
+    matchers:
+
+      # -----------------------------------------
+      # Reflected / Stored XSS detection
+      # -----------------------------------------
+      - type: word
+        part: body
+        words:
+          - "<script>alert(1)</script>"
+          - "<script>alert(document.domain)</script>"
+          - "%3Cscript%3Ealert"
+
+      # -----------------------------------------
+      # DOM XSS indicators (dangerous JS sinks)
+      # -----------------------------------------
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "document.location"
+          - "location.hash"
+          - "innerHTML"
+          - "document.write("
+          - "eval("
+          - "window.location"
+
+      # -----------------------------------------
+      # Successful response
+      # -----------------------------------------
+      - type: status
+        status:
+          - 200
