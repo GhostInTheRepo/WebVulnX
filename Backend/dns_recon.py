@@ -13,7 +13,7 @@ class DNSScanner:
     """DNS Reconnaissance Scanner Component"""
     
     # API Key provided by user
-    API_KEY = "f996a7f214d73f8ee1d6683f1a06df4aa2804c2222233c7811e06d35852450aa"
+    API_KEY = "##########################################"  """Place your API Key of DNS Dumpster"""
     
     # Record types to query
     RECORD_TYPES = ['A', 'AAAA', 'MX', 'NS', 'TXT', 'SOA']
