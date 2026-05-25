@@ -370,7 +370,7 @@ class TechDetector:
     def _run_whatcms_detection(self, target: str) -> List[Dict]:
         """Run WhatCMS API detection"""
         technologies = []
-        api_key = 'So5OBkIagDQGLJTvzkO0G3L9ykotMsOp'
+        api_key = '###################'  """Place your own API Key of WhatCMS"""
         
         try:
             # Extract domain from target for the API
