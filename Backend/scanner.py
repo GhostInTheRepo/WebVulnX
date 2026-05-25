@@ -18,7 +18,7 @@ import hashlib
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Shodan API Configuration
-SHODAN_API_KEY = "So5OBkIagDQGLJTvzkO0G3L9ykotMsOp"
+SHODAN_API_KEY = "#########################"   """Place Your Own API Key of Shodan"""  
 SHODAN_API_URL = "https://api.shodan.io"
 
 
